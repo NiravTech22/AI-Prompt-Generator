@@ -1,25 +1,25 @@
 {
-  "manifest_version": 3,
-  "name": "AI Prompt Generator",
-  "version": "1.0",
-  "description": "Generate curated AI prompts from 4-word descriptions",
-  "permissions": [
-    "activeTab"
-  ],
-  "action": {
-    "default_popup": "popup.html",
-    "default_title": "AI Prompt Generator"
-  },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["popup.html", "popup.js"],
-      "matches": ["<all_urls>"]
-    }
-  ]
-}
+    "manifest_version": 3,
+    "name": "AI Prompt Generator",
+    "version": "1.0",
+    "description": "Generate curated AI prompts from 4-word descriptions",
+    "permissions": [
+      "activeTab"
+    ],
+    "action": {
+      "default_popup": "popup.html",
+      "default_title": "AI Prompt Generator"
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["content.js"]
+      }
+    ],
+    "web_accessible_resources": [
+      {
+        "resources": ["popup.html", "popup.js"],
+        "matches": ["<all_urls>"]
+      }
+    ]
+  }

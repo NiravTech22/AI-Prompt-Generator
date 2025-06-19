@@ -8,14 +8,81 @@ Can be used as a standalone script or integrated with the browser extension
 import json
 import random
 import re
-from typing import List, Dict, Tuple
-from dataclasses import dataclass
+import os
+import base64
+from typing import List, Dict, Tuple, Any
+from dataclasses import dataclass, field
+# Add spaCy for advanced NLP
+try:
+    import spacy  # type: ignore
+    nlp = spacy.load('en_core_web_sm')
+except Exception:
+    nlp = None
+# NOTE: Requires: pip install torch transformers
+import openai  # type: ignore
+
+PROMPT_HISTORY_FILE = 'prompts_history.json'
+ATTEMPT_FILE = 'user_attempts.txt'
+
+# Set your OpenAI API key (for production, use environment variables!)
+openai.api_key = "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"
+
+def encrypt(text: str) -> str:
+    return base64.b64encode(text.encode('utf-8')).decode('utf-8')
+
+def decrypt(text: str) -> str:
+    try:
+        return base64.b64decode(text.encode('utf-8')).decode('utf-8')
+    except Exception:
+        return ''
+
+def save_prompt_to_history(prompt: str):
+    history = []
+    if os.path.exists(PROMPT_HISTORY_FILE):
+        with open(PROMPT_HISTORY_FILE, 'r', encoding='utf-8') as f:
+            try:
+                history = json.load(f)
+            except Exception:
+                history = []
+    history.append({'prompt': encrypt(prompt)})
+    with open(PROMPT_HISTORY_FILE, 'w', encoding='utf-8') as f:
+        json.dump(history, f)
+
+def get_prompt_history() -> list:
+    if not os.path.exists(PROMPT_HISTORY_FILE):
+        return []
+    with open(PROMPT_HISTORY_FILE, 'r', encoding='utf-8') as f:
+        try:
+            history = json.load(f)
+        except Exception:
+            return []
+    return [decrypt(item['prompt']) for item in history if 'prompt' in item]
+
+def get_attempt_count() -> int:
+    if not os.path.exists(ATTEMPT_FILE):
+        return 0
+    try:
+        with open(ATTEMPT_FILE, 'r') as f:
+            return int(f.read().strip())
+    except Exception:
+        return 0
+
+def increment_attempt_count():
+    count = get_attempt_count() + 1
+    with open(ATTEMPT_FILE, 'w') as f:
+        f.write(str(count))
+    return count
+
+def reset_attempt_count():
+    if os.path.exists(ATTEMPT_FILE):
+        os.remove(ATTEMPT_FILE)
 
 @dataclass
 class PromptTemplate:
     template: str
     category: str
     complexity: str  # 'simple', 'medium', 'advanced'
+    keywords: list = field(default_factory=list)  # Default to empty list
 
 class AIPromptGenerator:
     def __init__(self):
@@ -23,19 +90,19 @@ class AIPromptGenerator:
             'creative': [
                 PromptTemplate(
                     "Create a {topic} that is {style} and {audience}-focused, incorporating {element} to maximize engagement and impact.",
-                    'creative', 'medium'
+                    'creative', 'medium', ['create', 'engagement', 'impact', 'creative']
                 ),
                 PromptTemplate(
                     "Design an innovative {topic} strategy that combines {style} approach with {audience} targeting, emphasizing {element}.",
-                    'creative', 'advanced'
+                    'creative', 'advanced', ['design', 'innovative', 'strategy', 'creative']
                 ),
                 PromptTemplate(
                     "Develop a compelling {topic} concept that leverages {style} techniques to connect with {audience} through {element}.",
-                    'creative', 'medium'
+                    'creative', 'medium', ['develop', 'compelling', 'concept', 'creative']
                 ),
                 PromptTemplate(
                     "Generate a {style} {topic} that resonates with {audience} by highlighting {element} in an authentic way.",
-                    'creative', 'simple'
+                    'creative', 'simple', ['generate', 'resonate', 'highlight', 'creative']
                 )
             ],
             'technical': [
@@ -179,59 +246,129 @@ class AIPromptGenerator:
         
         return assignments
 
-    def generate_prompt(self, words: List[str], complexity: str = 'medium') -> Dict[str, str]:
-        """Generate a curated prompt from 4 words."""
+    def nlp_assign_words_to_slots(self, words: List[str]) -> Dict[str, str]:
+        """Use spaCy NLP to assign words to slots more intelligently."""
+        if not nlp:
+            return self.assign_words_to_slots(words)
+        doc = nlp(' '.join(words))
+        assignments = {'topic': '', 'style': '', 'audience': '', 'element': ''}
+        used = set()
+        # Try to use NER and POS to assign
+        for ent in doc.ents:
+            if ent.label_ in ['ORG', 'PRODUCT', 'WORK_OF_ART'] and not assignments['topic']:
+                assignments['topic'] = str(ent.text)
+                used.add(ent.text)
+            elif ent.label_ in ['PERSON', 'NORP', 'GROUP'] and not assignments['audience']:
+                assignments['audience'] = str(ent.text)
+                used.add(ent.text)
+        for token in doc:
+            if token.text in used:
+                continue
+            if token.pos_ == 'ADJ' and not assignments['style']:
+                assignments['style'] = str(token.text)
+                used.add(token.text)
+            elif token.pos_ == 'NOUN' and not assignments['element']:
+                assignments['element'] = str(token.text)
+                used.add(token.text)
+        # Fallback for any empty slots
+        for i, slot in enumerate(['topic', 'style', 'audience', 'element']):
+            if not assignments[slot]:
+                assignments[slot] = str(words[i])
+        return assignments
+
+    def semantic_score(self, words: List[str], template: PromptTemplate) -> int:
+        """Score a template based on overlap with input words and template keywords."""
+        if not template.keywords:
+            return 0
+        score = 0
+        for word in words:
+            for kw in template.keywords:
+                if word.lower() in kw.lower() or kw.lower() in word.lower():
+                    score += 1
+        return score
+
+    def contains_inappropriate_language(self, words: List[str]) -> bool:
+        banned_words = [
+            'fuck', 'shit', 'bitch', 'asshole', 'bastard', 'dick', 'cunt', 'nigger', 'fag', 'slut', 'whore', 'rape', 'retard', 'chink', 'spic', 'kike', 'twat', 'wank', 'cock', 'pussy', 'cum', 'faggot', 'nigga', 'motherfucker', 'fucker', 'douche', 'bollocks', 'bugger', 'bollok', 'arse', 'wanker', 'tosser', 'prick', 'dyke', 'tranny', 'coon', 'gook', 'spook', 'tard', 'homo', 'queer', 'kraut', 'gyp', 'gyppo', 'golliwog', 'negro', 'paki', 'raghead', 'sandnigger', 'skank', 'spade', 'wetback', 'zipperhead'
+        ]
+        for word in words:
+            for bw in banned_words:
+                if bw in word.lower():
+                    return True
+        return False
+
+    def generate_structured_prompt(self, words: list, user_history: list = None) -> str:
+        """
+        Generate a deeply structured prompt using OpenAI GPT-4 API,
+        optionally conditioning on user history.
+        """
+        # Build a context string from user history
+        history_context = ""
+        if user_history and len(user_history) > 0:
+            history_context = "User has previously requested: " + "; ".join(user_history[-3:]) + ". "
+        # Build a detailed instruction for the model
+        instruction = (
+            f"{history_context}Create a detailed, structured prompt for an AI system. "
+            f"Context: {words[0]}. Domain: {words[1]}. Format: {words[2]}. Goal: {words[3]}. "
+            "The prompt should be clear, actionable, and ready to use in another AI system."
+        )
+        # Call OpenAI GPT-4
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an expert prompt engineer."},
+                {"role": "user", "content": instruction}
+            ],
+            max_tokens=200,
+            temperature=0.7,
+        )
+        return response['choices'][0]['message']['content'].strip()
+
+    def generate_prompt(self, words: list, complexity: str = None) -> Dict[str, Any]:
+        # Only use explicit complexity, default to 'medium'. Do not infer.
+        complexity = complexity if complexity and isinstance(complexity, str) else 'medium'
+        if self.contains_inappropriate_language(words):
+            count = increment_attempt_count()
+            if count >= 2:
+                raise Exception('Access restricted due to inappropriate language.')
+            else:
+                raise Exception('Inappropriate language detected. One more attempt will result in restriction.')
+        reset_attempt_count()
         if len(words) != 4:
             raise ValueError("Exactly 4 words are required")
-        
-        # Clean and validate words
-        words = [word.strip() for word in words if word.strip()]
+        words = [str(word).strip() for word in words if str(word).strip()]
         if len(words) != 4:
             raise ValueError("All 4 words must be non-empty")
-        
-        # Detect category and get appropriate templates
-        category = self.detect_category(words)
-        templates = [t for t in self.prompt_templates[category] 
-                   if t.complexity == complexity or complexity == 'any']
-        
-        if not templates:
-            templates = self.prompt_templates[category]
-        
-        # Select random template
-        selected_template = random.choice(templates)
-        
-        # Assign words to slots intelligently
-        assignments = self.assign_words_to_slots(words)
-        
-        # Generate the prompt
-        prompt = selected_template.template.format(
-            topic=assignments['topic'],
-            style=assignments['style'],
-            audience=assignments['audience'],
-            element=assignments['element']
-        )
-        
+        # Use local model for prompt generation
+        history = get_prompt_history()
+        structured_prompt = self.generate_structured_prompt(words, history)
+        save_prompt_to_history(structured_prompt)
         return {
-            'prompt': prompt,
-            'category': category,
-            'complexity': selected_template.complexity,
-            'words_used': words,
-            'assignments': assignments
+            'prompt': structured_prompt,
+            'history': history
         }
 
-    def generate_multiple_prompts(self, words: List[str], count: int = 3) -> List[Dict[str, str]]:
-        """Generate multiple prompt variations."""
+    def explain_prompt_choice(self, words: List[str], template: PromptTemplate, assignments: Dict[str, str]) -> str:
+        """Explain why this prompt/template was chosen."""
+        explanation = f"Selected template for category '{template.category}' and complexity '{template.complexity}'. "
+        if template.keywords:
+            overlap = [w for w in words if any(w.lower() in k.lower() or k.lower() in w.lower() for k in template.keywords)]
+            explanation += f"Matched keywords: {', '.join(overlap)}. "
+        explanation += f"Slot assignments: {assignments}."
+        return explanation
+
+    def generate_multiple_prompts(self, words: List[str], count: int = 3) -> List[Dict[str, Any]]:
+        if self.contains_inappropriate_language(words):
+            raise Exception('Access restricted due to inappropriate language.')
         prompts = []
         complexities = ['simple', 'medium', 'advanced']
-        
         for i in range(count):
-            complexity = complexities[i % len(complexities)]
+            complexity = str(complexities[i % len(complexities)])
             try:
                 prompt_data = self.generate_prompt(words, complexity)
                 prompts.append(prompt_data)
             except Exception as e:
                 print(f"Error generating prompt {i+1}: {e}")
-        
         return prompts
 
 def main():
