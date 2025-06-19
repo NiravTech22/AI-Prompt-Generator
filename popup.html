@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            width: 380px;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .container {
+            background: #161b22;
+            padding: 24px;
+            border: 1px solid #30363d;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        
+        h1 {
+            margin: 0 0 24px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #f0f6fc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .logo {
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #7c3aed, #a855f7);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        
+        .input-group {
+            margin-bottom: 16px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 13px;
+            color: #7d8590;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #0d1117;
+            color: #e6edf3;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', Consolas, monospace;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #7c3aed;
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+        }
+        
+        input[type="text"]::placeholder {
+            color: #6e7681;
+            font-style: italic;
+        }
+        
+        .word-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 10px 16px;
+            background: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+        
+        button:hover {
+            background: #6d28d9;
+            transform: translateY(-1px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #30363d;
+            color: #6e7681;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 16px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            border-left: 3px solid #7c3aed;
+            display: none;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        
+        .result.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .copy-btn {
+            background: #238636;
+            margin-top: 12px;
+            padding: 8px 12px;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+        
+        .copy-btn:hover {
+            background: #2ea043;
+        }
+        
+        .loading {
+            color: #7d8590;
+            font-style: italic;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .loading::before {
+            content: '';
+            width: 12px;
+            height: 12px;
+            border: 2px solid #30363d;
+            border-top: 2px solid #7c3aed;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .word-count {
+            font-size: 12px;
+            color: #6e7681;
+            text-align: right;
+            margin-top: 8px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', Consolas, monospace;
+        }
+        
+        .prompt-label {
+            color: #7d8590;
+            font-size: 12px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        
+        .prompt-text {
+            color: #e6edf3;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .meta-info {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #6e7681;
+        }
+        
+        .category-badge {
+            background: rgba(124, 58, 237, 0.1);
+            color: #a855f7;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <div class="logo">⚡</div>
+            AI Prompt Generator
+        </h1>
+        
+        <div class="word-inputs">
+            <div class="input-group">
+                <label for="word1">Context</label>
+                <input type="text" id="word1" placeholder="creative">
+            </div>
+            <div class="input-group">
+                <label for="word2">Domain</label>
+                <input type="text" id="word2" placeholder="marketing">
+            </div>
+            <div class="input-group">
+                <label for="word3">Format</label>
+                <input type="text" id="word3" placeholder="email">
+            </div>
+            <div class="input-group">
+                <label for="word4">Goal</label>
+                <input type="text" id="word4" placeholder="campaign">
+            </div>
+        </div>
+        
+        <div class="word-count" id="wordCount">0/4 parameters</div>
+        
+        <button id="generateBtn">Generate Prompt</button>
+        
+        <div class="result" id="result">
+            <div class="prompt-label">Generated Prompt</div>
+            <div class="prompt-text" id="promptOutput"></div>
+            <div class="meta-info">
+                <span class="category-badge" id="categoryBadge">category</span>
+                <span id="complexityInfo">complexity</span>
+            </div>
+            <button class="copy-btn" id="copyBtn">Copy to Clipboard</button>
+        </div>
+    </div>
+
+    <script>
+        // Prompt templates for different categories
+        const promptTemplates = {
+            creative: [
+                "Create a {topic} that is {style} and {audience}-focused, incorporating {element} to maximize engagement and impact.",
+                "Design an innovative {topic} strategy that combines {style} approach with {audience} targeting, emphasizing {element}.",
+                "Develop a compelling {topic} concept that leverages {style} techniques to connect with {audience} through {element}."
+            ],
+            technical: [
+                "Build a {topic} solution using {style} methodology that addresses {audience} needs, implementing {element} for optimal results.",
+                "Architect a {topic} system with {style} design patterns, optimized for {audience} requirements and {element} integration.",
+                "Engineer a {topic} framework incorporating {style} principles, tailored for {audience} with {element} functionality."
+            ],
+            business: [
+                "Develop a {topic} strategy that utilizes {style} approach to engage {audience}, focusing on {element} for competitive advantage.",
+                "Create a comprehensive {topic} plan with {style} methodology, targeting {audience} while emphasizing {element} outcomes.",
+                "Design a {topic} initiative using {style} framework to reach {audience}, with {element} as the key differentiator."
+            ],
+            content: [
+                "Craft {topic} content with {style} tone that resonates with {audience}, highlighting {element} throughout the narrative.",
+                "Produce engaging {topic} material using {style} storytelling techniques for {audience}, centered around {element}.",
+                "Generate compelling {topic} copy with {style} voice that speaks to {audience}, featuring {element} prominently."
+            ],
+            analysis: [
+                "Analyze {topic} using {style} methodology to provide insights for {audience}, with focus on {element} implications.",
+                "Examine {topic} through {style} lens to deliver actionable recommendations for {audience}, emphasizing {element}.",
+                "Investigate {topic} with {style} approach to generate strategic insights for {audience}, prioritizing {element}."
+            ]
+        };
+
+        // Category keywords for smart template selection
+        const categoryKeywords = {
+            creative: ['creative', 'design', 'art', 'visual', 'brand', 'marketing', 'campaign', 'content', 'story', 'narrative'],
+            technical: ['code', 'software', 'app', 'system', 'database', 'api', 'algorithm', 'program', 'development', 'tech'],
+            business: ['strategy', 'business', 'sales', 'revenue', 'market', 'growth', 'plan', 'roi', 'profit', 'customer'],
+            content: ['blog', 'article', 'post', 'copy', 'write', 'content', 'social', 'email', 'newsletter', 'script'],
+            analysis: ['analyze', 'research', 'data', 'report', 'study', 'insights', 'metrics', 'trends', 'evaluation', 'assessment']
+        };
+
+        function detectCategory(words) {
+            const wordString = words.join(' ').toLowerCase();
+            let maxScore = 0;
+            let bestCategory = 'creative';
+            
+            for (const [category, keywords] of Object.entries(categoryKeywords)) {
+                const score = keywords.reduce((acc, keyword) => {
+                    return acc + (wordString.includes(keyword) ? 1 : 0);
+                }, 0);
+                
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestCategory = category;
+                }
+            }
+            
+            return bestCategory;
+        }
+
+        function generatePrompt(words) {
+            const category = detectCategory(words);
+            const templates = promptTemplates[category];
+            const template = templates[Math.floor(Math.random() * templates.length)];
+            
+            // Smart word assignment based on context
+            const assignments = assignWordsToSlots(words, template);
+            
+            return template
+                .replace('{topic}', assignments.topic)
+                .replace('{style}', assignments.style)
+                .replace('{audience}', assignments.audience)
+                .replace('{element}', assignments.element);
+        }
+
+        function assignWordsToSlots(words, template) {
+            // Simple heuristic-based assignment
+            const assignments = {
+                topic: words[0],
+                style: words[1],
+                audience: words[2],
+                element: words[3]
+            };
+            
+            // Smart reassignment based on word characteristics
+            const styleWords = ['modern', 'creative', 'professional', 'casual', 'formal', 'innovative', 'traditional'];
+            const audienceWords = ['customers', 'users', 'clients', 'students', 'professionals', 'team', 'audience'];
+            
+            words.forEach((word, index) => {
+                const lowerWord = word.toLowerCase();
+                if (styleWords.some(s => lowerWord.includes(s))) {
+                    assignments.style = word;
+                    assignments.topic = words.filter(w => w !== word)[0] || assignments.topic;
+                }
+                if (audienceWords.some(a => lowerWord.includes(a))) {
+                    assignments.audience = word;
+                }
+            });
+            
+            return assignments;
+        }
+
+        function updateWordCount() {
+            const words = [
+                document.getElementById('word1').value.trim(),
+                document.getElementById('word2').value.trim(),
+                document.getElementById('word3').value.trim(),
+                document.getElementById('word4').value.trim()
+            ].filter(word => word !== '');
+            
+            document.getElementById('wordCount').textContent = `${words.length}/4 parameters`;
+            
+            // Update button state
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = words.length < 4;
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = ['word1', 'word2', 'word3', 'word4'];
+            inputs.forEach(id => {
+                document.getElementById(id).addEventListener('input', updateWordCount);
+                document.getElementById(id).addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        document.getElementById('generateBtn').click();
+                    }
+                });
+            });
+
+            document.getElementById('generateBtn').addEventListener('click', function() {
+                const words = [
+                    document.getElementById('word1').value.trim(),
+                    document.getElementById('word2').value.trim(),
+                    document.getElementById('word3').value.trim(),
+                    document.getElementById('word4').value.trim()
+                ].filter(word => word !== '');
+
+                if (words.length < 4) {
+                    alert('Please enter all 4 words to generate a prompt.');
+                    return;
+                }
+
+                const resultDiv = document.getElementById('result');
+                const promptOutput = document.getElementById('promptOutput');
+                const categoryBadge = document.getElementById('categoryBadge');
+                const complexityInfo = document.getElementById('complexityInfo');
+                
+                promptOutput.innerHTML = '<div class="loading">Generating optimized prompt...</div>';
+                resultDiv.classList.add('show');
+
+                // Simulate processing time for better UX
+                setTimeout(() => {
+                    const prompt = generatePrompt(words);
+                    const category = detectCategory(words);
+                    
+                    promptOutput.textContent = prompt;
+                    categoryBadge.textContent = category;
+                    complexityInfo.textContent = 'medium complexity';
+                }, 600);
+            });
+
+            document.getElementById('copyBtn').addEventListener('click', function() {
+                const promptText = document.getElementById('promptOutput').textContent;
+                navigator.clipboard.writeText(promptText).then(() => {
+                    const btn = document.getElementById('copyBtn');
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    btn.style.background = '#2ea043';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '#238636';
+                    }, 1500);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
